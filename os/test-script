@@ -1,0 +1,77 @@
+# This is the final script to be run after everything
+# is supposed to be working.
+#
+#   should be run as follows:
+#
+#   script ScriptOut
+#   sh test-script
+#   exit
+#
+
+echo This script tests the 509 Blitz OS
+
+echo Testing Chdir (via sh "cd" command)
+
+if cd /testdir
+   if test $(pwd) != /testdir
+      echo chdir said success, wrong directory $(pwd)
+   else
+       set CD 1
+       echo Chdir works, running tests (e.g. programs)
+       stat primes.txt
+       mkdir newdir
+       if test -d newdir
+          echo newdir was made, Mkdir works
+          set MKDIR 1
+	  rmdir newdir
+	  if test -d newdir
+	     echo Rmdir appears to not work
+	  else
+	     echo Rmdir appears to work
+	  end
+       else
+         echo Mkdir does not appear to work
+       end
+       # testing Link and Unlink
+       echo Testing > file1
+       ln file1 file2
+       if test -f file2 -a $(stat -s file1) = $(stat -s file2) -a $(stat -l file1) = 2
+          echo Link appears to work
+          set LN 1
+          rm file1
+          if test $(stat -l file2) = 1
+             echo Unlink appears to work
+	  else
+	     echo Unlink does not appear to work
+          end
+       else
+          echo link does not appear to work
+       end
+   end
+end
+
+if test $(pwd) = /testdir -a ${MKDIR} = 1 
+  echo runing a bunch of programs, be patient, this will take time
+  grep 3555 primes.txt | cat | cat | cat | tee 3555
+  du -s .
+  cp primes.txt new.txt
+  du -s .
+  mkdir td
+  cd td
+  set x 1
+  while test ${x} -lt 50
+     echo "file ${x} in the list" > file-${x}
+     set x $(expr ${x} + 1 )
+  end
+  echo $(ls)
+  du -s .
+    set x 1
+  while test ${x} -lt 50
+     rm file-${x}
+     set x $(expr ${x} + 3 )
+  end
+  du -s .
+  exn 50
+end
+
+echo End testing script

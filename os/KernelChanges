@@ -1,0 +1,237 @@
+Add the following line to Kernel.h in the ToyFs methods section
+
+    GetDiskInfo (buffPtr: ptr to diskInfo) returns int
+
+Add the following field to the ToyFs class:
+
+    numDblocks: int
+
+Add the following class definitions to Kernel.h
+
+------------------------  SerialDriver  ----------------------------
+--
+--  There is only one instance of this class.
+--
+const
+  SERIAL_CHARACTER_AVAILABLE_BIT                 = 0x00000001
+  SERIAL_OUTPUT_READY_BIT                        = 0x00000002
+  SERIAL_STATUS_WORD_ADDRESS                     = 0x00FFFF00
+  SERIAL_DATA_WORD_ADDRESS                       = 0x00FFFF04
+
+  class SerialDriver
+  superclass Object
+  fields
+    initialized : bool
+    serial_status_word_address: ptr to int
+    serial_data_word_address: ptr to int
+    serialLock: Mutex
+    getBuffer: array [SERIAL_GET_BUFFER_SIZE] of char
+    getBufferSize: int
+    getBufferNextIn: int
+    getBufferNextOut: int
+    getCharacterAvail: Condition
+    putBuffer: array [SERIAL_PUT_BUFFER_SIZE] of char
+    putBufferSize: int
+    putBufferNextIn: int
+    putBufferNextOut: int
+    putBufferSem: Semaphore
+    serialNeedsAttention: Semaphore
+    serialHandlerThread: Thread
+  methods
+    Init ()
+    PutChar (value: char)
+    GetChar () returns char
+    SerialHandler ()
+  endClass
+
+----------------------------- Pipe --------------------------------
+
+  const MAX_NUMBER_OF_PIPES = 6
+
+  class Pipe
+    superclass Listable
+
+    fields
+        bufferFrame: int        -- Buffer frame, needs to be acquired at open time
+        head, tail: int         -- Circular buffer
+        numberOfUsers: int      -- Should start at 2 and go down on closes
+        pipeMutex: Mutex
+        charsInPipe: int
+        readQueue: Condition    
+        writeQueue: Condition
+        writer: Condition
+        
+
+    methods
+        Init ()
+        Print ()
+        Open () returns bool
+        Read (buffer: ptr to char, sizeInBytes: int) returns int
+        Write (buffer: ptr to char, sizeInBytes: int) returns int
+        Close ()
+
+  endClass
+
+Replace the ToyFs Init() code with:
+
+     --------------- ToyFs . Init  ----------------
+
+      method Init()
+        var
+            p: ptr to int
+
+          -- Get a frame for inode manipulations and initialize the lock
+          inodeBuffer = frameManager.GetAFrame ()
+          inodeBuffSec = -1
+          fsLock = new Mutex
+          fsLock.Init ()
+
+          -- Read in sector 0 from the disk.  This is the super bloc,
+          superBlock = frameManager.GetAFrame ()
+          diskDriver.SynchReadSector (0,    -- sector to read
+                                      1,    -- number of sectors to read
+                                      superBlock)
+          p = superBlock asPtrTo int
+
+          if *p != 0x54794673 -- "TyFs", the ToyFs magic number
+            FatalError ("Magic number in sector 0 of ToyFs file system is bad")
+          endIf
+
+          -- Get file system parameters
+          p = p+4
+          fssize = *p
+          p = p+4
+          numInodes = *p
+          numDblocks = fssize - numInodes/128 - 1
+
+          --print ("super: fssize: ")  printInt (fssize)
+          --print (" inodes: ") printInt (numInodes)
+          --print (" dblocks: ") printInt (numDblocks)
+          --print ("\n")
+
+          -- Skip over unused integer
+          p = p+8
+          i_bitmap = new BitMap
+          i_bitmap.InitFromPtr(numInodes+1, p asPtrTo array of int)
+          --print ("inode ") i_bitmap.Print()
+
+          -- Move over i_bitmap
+          p = p + *p*4 + 4
+          d_bitmap = new BitMap
+          d_bitmap.InitFromPtr(numDblocks+1, p asPtrTo array of int)
+          --printIntVar("dbit map size: ", numDblocks)
+          --print ("data ") d_bitmap.Print()
+
+         -- offset for data sectors
+          fileSystem.dataSecOffset =  numInodes / INODES_PER_SEC
+          --printIntVar ("dataSecOffset: ", fileSystem.dataSecOffset)
+
+          -- Create the Root Directory
+          rootDirectory = null
+          rootDirectory = fileManager.Open("/",null,O_READ,0)
+          rootDirectory.kind = DIRECTORY
+
+       endMethod
+
+
+
+
+Add the following changes where approprate to Kernel.k:
+
+SyscallTrapHandler:
+
+	case SYSCALL_GETDISKINFO:
+	  return Handle_Sys_GetDiskInfo (arg1 asPtrTo diskInfo)
+
+-----------------------------  Handle_Sys_GetDiskInfo  -------------------------
+
+  function Handle_Sys_GetDiskInfo (buffPtr: ptr to diskInfo) returns int
+        if buffPtr asInteger < 0 ||  buffPtr asInteger + 20 > 
+	       currentThread.myProcess.addrSpace.numberOfPages*PAGE_SIZE
+       	   currentThread.myProcess.lastError = E_Bad_Address
+           return -1
+        endIf
+
+	return fileSystem.GetDiskInfo (buffPtr)
+
+      endFunction
+	
+      --------------- ToyFs . GetDiskInfo  ----------------
+    method GetDiskInfo (buffPtr: ptr to diskInfo) returns int
+    	var di: diskInfo
+	    rv: int
+	di.diskSize = fssize
+	di.totalInodes = numInodes
+	di.freeInodes = i_bitmap.NumberOfClearBits()
+	di.totalDblocks = numDblocks
+	di.freeDblocks = d_bitmap.NumberOfClearBits()
+	rv = currentThread.myProcess.addrSpace.
+	       CopyBytesToVirtual (buffPtr asInteger, (&di) asInteger, 20)
+	if rv != 20
+	   return -1
+	else
+	   return 0
+	endIf
+      endMethod
+
+
+     ----------  OpenFile . RemoveEntry  ----------
+
+     -- Lookup must be called just before calling RemoveEntry.
+     -- RemoveEntry will remove the entry found a successful
+     -- call to Lookup.
+   
+     method RemoveEntry (filename: String, ent: ptr to dirEntry) returns bool
+        var 
+	    offset: int
+	    entSz: int
+	    cpySz: int
+
+	   -- Sanity check
+           if kind != DIRECTORY
+	      FatalError ("RemoveEntry on a non-Directory file.")
+	   endIf
+
+	   -- print ("OpenFile:RemoveEntry -> ") print(filename) nl()
+	   if (StrCmp(filename,".") == 0) ||  (StrCmp(filename,"..") == 0)
+	      return false
+	   endIf
+
+	   fileSystem.fsLock.Lock()
+	   offset = (ent asInteger) - fcb.bufferPtr
+	   if offset < 0 || offset >= PAGE_SIZE
+	       fileSystem.fsLock.Unlock()
+	       print ("RemoveEntry Bug!\n")
+	       return false
+	   endIf
+
+	   -- Update Current pointer to location of entry
+	   entSz =  entSize(ent.name arraySize)
+	   currentPos = currentPos - entSz
+	   
+	   -- calculate how much to move
+	   if fcb.inode.fsize - currentPos < PAGE_SIZE - offset
+	      cpySz = fcb.inode.fsize - currentPos - entSz
+	   else
+	      cpySz = PAGE_SIZE - offset
+	   endIf
+
+	   --printIntVar("offset", offset) 
+	   --printIntVar ("currentPos", currentPos) 
+	   --printIntVar ("cpySz", cpySz)
+
+	   MemoryCopy (fcb.bufferPtr+offset, fcb.bufferPtr+offset+entSz, cpySz)
+	   fcb.bufferIsDirty = true
+	   if fcb.inode.fsize - currentPos < PAGE_SIZE - offset
+	      fcb.inode.fsize = fcb.inode.fsize - entSz
+	      fcb.inode.dirty = true
+	      fileSystem.fsLock.Unlock()
+	      fcb.inode.WriteInode()
+	   else
+      	      fileSystem.fsLock.Unlock()
+	   endIf
+
+	   -- Delete the last block(s)?  <Needs to be implemented>
+
+           return true
+        endMethod

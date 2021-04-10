@@ -1,0 +1,68 @@
+# This is the final script to be run after everything
+# is supposed to be working.   This is the 447 version
+#
+#   should be run as follows:
+#
+#   
+#   script test-output
+#   sh test-447
+#   exit
+#
+
+echo This script tests the 447 Blitz OS
+
+echo Testing command expansion
+set ROOT $(stat -i /)
+echo Root directory inode number is ${ROOT}
+if test ${ROOT} -ne 1
+   set PIPE 0
+else
+   set PIPE 1
+end
+
+echo Testing Chdir via the "cd" command
+if cd /testdir/subdir
+  if test ${PIPE} -eq 1
+     if test $(stat -i .) -eq 52
+        echo It appears that Chdir works correctly.
+     else
+        echo It appears that Chdir does not work.
+     end
+  else
+     echo If Chdir works, the next line should say 51.
+     stat -i .
+  end
+  cd /testdir
+end
+
+echo Running some tests, this may take some time
+if test ${PIPE} -eq 1
+  df -d .
+  grep 35 primes.txt | cat | cat | cat | tee grep-output
+  df -d .
+  ls -l grep-output
+else
+  echo Can't test pipes.
+end
+
+wc primes.txt
+cp primes.txt file-out
+ls -l file-out
+df -d
+cat primes.txt primes.txt > file-out
+ls -l file-out
+df -d
+if test ${PIPE} -eq 1
+   if test $(stat -s grep-output) -eq 4939
+      echo grep-output has correct size!
+   end
+   if test $(stat -s file-out) -eq 327964
+      echo test-out has correct size!
+   end
+   if test $(df -d ) -eq 123
+      echo Disk blocks remaining is correct!
+   end
+end
+exn 50
+
+echo End of test script

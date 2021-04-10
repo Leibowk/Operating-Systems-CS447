@@ -1,0 +1,55 @@
+--- /home/phil/Class/509/f19/plan/assgn/a3/Kernel.k	2019-10-21 14:54:25.929720776 -0700
++++ Kernel.k	2020-01-17 14:18:35.651450422 -0800
+@@ -754,6 +754,7 @@
+       method Init ()
+           pid = -1
+           status = FREE
++	  lastError = E_No_Error
+           addrSpace = new AddrSpace
+           addrSpace.Init ()
+ -- Uncomment this code later...
+@@ -1266,6 +1267,7 @@
+           if numBytes == 0
+             return 0
+           elseIf numBytes < 0
++	    currentThread.myProcess.lastError = E_Bad_Value
+             return -1
+           endIf
+           virtPage = virtAddr / PAGE_SIZE
+@@ -1275,10 +1277,12 @@
+           while true
+             if virtPage >= numberOfPages
+               print ("  Virtual page number is too large!!!\n")
++	      currentThread.myProcess.lastError = E_Bad_Value
+               return -1
+             endIf
+             if ! self.IsValid (virtPage)
+               print ("  Virtual page is not marked VALID!!!\n")
++	      currentThread.myProcess.lastError = E_Bad_Value
+               return -1
+             endIf
+             fromAddr = self.ExtractFrameAddr (virtPage) + offset
+@@ -1316,6 +1320,7 @@
+           if numBytes == 0
+             return 0
+           elseIf numBytes < 0
++	    currentThread.myProcess.lastError = E_Bad_Value
+             return -1
+           endIf
+           virtPage = virtAddr / PAGE_SIZE
+@@ -1324,6 +1329,7 @@
+             if (virtPage >= numberOfPages) ||
+                (! self.IsValid (virtPage)) ||
+                (! self.IsWritable (virtPage))
++	      currentThread.myProcess.lastError = E_Bad_Value
+               return -1
+             endIf
+             destAddr = self.ExtractFrameAddr (virtPage) + offset
+@@ -1376,6 +1382,7 @@
+           -- printIntVar ("  sourceSize", sourceSize)
+           -- Make sure the source size is okay
+           if sourceSize > maxSize
++	    currentThread.myProcess.lastError = E_Bad_Value
+             return -1
+           endIf
+           -- Change the size of the destination array

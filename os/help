@@ -1,0 +1,158 @@
+Help file for the BLITZ operating system.  Most of these commands assume
+you have command line arguments working.
+
+Avaliable commands: 
+
+  cat [file ...]
+    Very similar to the UNIX cat.
+
+  chmode mode file ...
+    mode is a combination of rwx or a single digit from 0 to 7
+
+  cp file file
+    Copy a file to another file
+
+  cp file file file dir
+    Copy a list of files to a directory
+
+  du [-k] [-s] [-n] [directory_or_file ...]
+    Calculate the amount of disk space used in file system blocks.
+    -k asks for report in K bytes, -s asks for a summary,
+    -n just print the number and not the file name
+
+  df [-F] [-i] [-I] [-d] [-D]
+    Print the disk free data.  no arguments prints all with a header.
+    Arguments just print that value with no header.  F -- Total file
+    system sectors, -i free inodes,  -I total indoes, -d free data
+    sectors, -D total data sectors
+
+  echoargs
+    This command echos the arguments one per line.
+
+  exn n
+    run exn n times using Sys_Exec system call
+
+  expr expression
+    print the value of the expression in the arguments.  Supports
+    +, -, *, /, % (remainder) and parenthesis
+
+  grep [-v] pattern file
+    Print matching lines, no regular expressions implemented.
+    -v prints lines not matched.
+
+  hello
+    Prints "Hello, World!"
+
+  ln
+    Create a new link to a file
+
+  ls [-adl] [dir]
+    List the files in a directory.  -a show all files, -d show dir
+    not the list of files, -l is long format
+
+  mkdir dir
+    Make a new directory
+
+  more file [...]
+    Show one page of a file at a time
+
+  pwd 
+    Print the working directory name.
+
+  rm file [...]
+    Unlink a file
+
+  rmdir dir [...]
+    Remove an empty directory
+
+  script [file]
+    Runs a new shell saving all input and output to the shell in a file
+
+  setexit value
+    Just exit with that value on the command line
+
+  sh [script args ...]
+    A simple shell, documented below.
+
+  shutdown
+    call Sys_Shutdown.
+
+  stat file [...]
+    Prints the statInfo for the file in a simple format:
+    format: 'name: inode_number number_of_links type permissions size blocks'
+
+  tee file
+    A pipe fitting!  Copy stdin to both stdout and a file
+
+  test
+    A program to test the arguments.  Similar to the UNIX test.
+    Operators supported:
+      =  !=    comparison of strings
+      -eq -ne -lt -le -gt -ge   comparison on integers
+      -o  -a   logical operators
+      (  )     grouping
+    If run as the name [, the last arg must be ]
+
+  wc [-clw] 
+    A program to count characters, words and lines.
+
+------  end of commands -----
+
+The shell (sh) for BLITZ has the following features:
+
+Search path:  /bin and then . to find commands that do not
+start with "/".
+
+Redirection of standard in and standard out is supported.
+  < file -- for standard in redirection
+  > file -- for standard out redirection
+
+Built-in commands ... ones executed by the shell
+  cd [dir]
+    change directory, no argument connects to /.
+  echo [args]
+    This command is built-in to the shell and will echo the arguments!
+  exit [value]
+    This command is built-in to the shell and will terminate it.
+  false
+    sets the last command exit value to 1
+  read var
+    reads a line from stdin and sets the variable with that value
+  set var value
+    Sets a shell variable to the value.
+  true
+    sets the last command exit value to 0
+  unset var
+    deletes the definition of the variable
+    
+
+Expansion processing:
+  ${name} expands to the value of that shell variable
+  $? expands to the exit value of the last program run
+  $$ expands to the pid of the shell
+  $(command) expands to the output of the command
+
+Other:
+  Pipes are supported:   cmd1 | cmd2 | cmd3 ... | cmdn
+  Statements are supported:
+     if command
+     end
+
+     if command
+     else
+     end
+
+     while command
+     end
+
+---------
+
+The BLITZ disk has these files to play with:
+  help  --  Which you are reading
+  fileA, fileB, fileC  --  Each of these has length 54
+  fileD --  A file of size 1500
+  file1, file2, file3 -- of various sizes
+  script.sh -- a shell script
+
+Try this:
+  sh script.sh 
